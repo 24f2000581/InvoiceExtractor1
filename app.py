@@ -84,6 +84,23 @@ def detect_currency(text):
 
     return None
 
+def extract_tax(text):
+    taxes = []
+
+    pattern = r"(?:CGST|SGST|IGST|GST|Tax)[^0-9\n]*?(?:Rs\.?|₹|\$|USD|INR)?\s*([\d,]+(?:\.\d+)?)"
+
+    matches = re.findall(pattern, text, re.IGNORECASE)
+
+    for match in matches:
+        try:
+            taxes.append(float(match.replace(",", "")))
+        except:
+            pass
+
+    if taxes:
+        return round(sum(taxes), 2)
+
+    return None
 
 # -----------------------------
 # API
@@ -120,16 +137,14 @@ def extract_invoice(req: InvoiceRequest):
         r"Sub\s*Total\s*[:.\- ]*\s*(?:Rs\.?|₹|\$|USD|INR)?\s*([\d,]+\.\d+)"
     ], text)
 
-    tax = extract([
-        r"(?:GST|CGST|SGST|IGST|Tax).*?(?:Rs\.?|₹|\$|USD|INR)?\s*([\d,]+\.\d+)"
-    ], text)
+    tax = extract_tax(text)
 
     result = {
         "invoice_no": invoice_no,
         "date": parse_date(text),
         "vendor": vendor,
         "amount": parse_amount(amount),
-        "tax": parse_amount(tax),
+        "tax": tax,
         "currency": detect_currency(text)
     }
 
