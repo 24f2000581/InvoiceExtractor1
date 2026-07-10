@@ -85,22 +85,41 @@ def detect_currency(text):
     return None
 
 def extract_tax(text):
-    taxes = []
+    total = 0.0
+    found = False
 
-    pattern = r"(?:CGST|SGST|IGST|GST|Tax)[^0-9\n]*?(?:Rs\.?|₹|\$|USD|INR)?\s*([\d,]+(?:\.\d+)?)"
+    # Prefer explicit tax component lines
+    patterns = [
+        r"CGST\s*(?:\([^)]*\))?\s*[:\-]?\s*(?:Rs\.?|₹|INR)?\s*([\d,]+(?:\.\d+)?)",
+        r"SGST\s*(?:\([^)]*\))?\s*[:\-]?\s*(?:Rs\.?|₹|INR)?\s*([\d,]+(?:\.\d+)?)",
+        r"IGST\s*(?:\([^)]*\))?\s*[:\-]?\s*(?:Rs\.?|₹|INR)?\s*([\d,]+(?:\.\d+)?)",
+    ]
 
-    matches = re.findall(pattern, text, re.IGNORECASE)
+    for pattern in patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        for m in matches:
+            try:
+                total += float(m.replace(",", ""))
+                found = True
+            except ValueError:
+                pass
 
-    for match in matches:
-        try:
-            taxes.append(float(match.replace(",", "")))
-        except:
-            pass
+    # If no CGST/SGST/IGST found, look for a single GST or Tax amount
+    if not found:
+        fallback_patterns = [
+            r"GST\s*(?:Amount)?\s*(?:\([^)]*\))?\s*[:\-]?\s*(?:Rs\.?|₹|INR)?\s*([\d,]+(?:\.\d+)?)",
+            r"Tax\s*(?:Amount)?\s*[:\-]?\s*(?:Rs\.?|₹|INR)?\s*([\d,]+(?:\.\d+)?)",
+        ]
 
-    if taxes:
-        return round(sum(taxes), 2)
+        for pattern in fallback_patterns:
+            m = re.search(pattern, text, re.IGNORECASE)
+            if m:
+                try:
+                    return float(m.group(1).replace(",", ""))
+                except ValueError:
+                    pass
 
-    return None
+    return round(total, 2) if found else None
 
 # -----------------------------
 # API
