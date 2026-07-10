@@ -36,7 +36,6 @@ def clean_number(value_str):
         return None
 
 def extract_invoice_no(text):
-    # Sequential matching sorted from most specific to least specific
     patterns = [
         r"\bInvoice\s*No\.?\s*[:\-]?\s*([A-Za-z0-9\-\/]+)",
         r"\bInvoice\s*#\s*[:\-]?\s*([A-Za-z0-9\-\/]+)",
@@ -45,7 +44,6 @@ def extract_invoice_no(text):
         r"\bInvoice\s+([A-Za-z0-9\-\/]+)"
     ]
     
-    # Blacklist words to prevent catching headers or structural words
     blacklist = {"invoice", "no", "date", "tax", "vendor", "supplier", "client", "to", "bill"}
     
     for pattern in patterns:
@@ -97,16 +95,31 @@ def extract_amount(text):
     return None
 
 def extract_tax(text):
+    lines = text.split("\n")
+    
+    # Step 1: Check for an explicit overall tax summary line to prevent component double-counting
+    for line in lines:
+        if re.search(r"\b(total\s+tax|tax\s+total|total\s+gst|total\s+vat|total\s+igst)\b", line, re.IGNORECASE):
+            numbers = re.findall(r"[\d,]+(?:\.\d+)?", line)
+            if numbers:
+                return clean_number(numbers[-1])
+                
+    # Step 2: Fallback to summing components if no single total line exists
     total_tax = 0.0
     found_tax = False
-    for line in text.split("\n"):
-        if re.search(r"\b(GST|CGST|SGST|IGST|VAT|Tax)\b", line, re.IGNORECASE) and not re.search(r"\b(taxable|before|invoice)\b", line, re.IGNORECASE):
+    for line in lines:
+        # Avoid picking up base amounts or total invoice values
+        if re.search(r"\b(taxable|before|subtotal|sub-total|total\s+due|grand\s+total)\b", line, re.IGNORECASE):
+            continue
+            
+        if re.search(r"\b(GST|CGST|SGST|IGST|VAT|Tax)\b", line, re.IGNORECASE):
             numbers = re.findall(r"[\d,]+(?:\.\d+)?", line)
             if numbers:
                 val = clean_number(numbers[-1])
                 if val is not None:
                     total_tax += val
                     found_tax = True
+                    
     return round(total_tax, 2) if found_tax else None
 
 def detect_currency(text):
