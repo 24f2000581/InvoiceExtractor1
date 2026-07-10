@@ -36,15 +36,23 @@ def clean_number(value_str):
         return None
 
 def extract_invoice_no(text):
+    # Added explicit matches for "Invoice Number" and isolated "Number:" lines
     patterns = [
+        r"\bInvoice\s*Number\s*[:\-]?\s*([A-Za-z0-9\-\/]+)",
         r"\bInvoice\s*No\.?\s*[:\-]?\s*([A-Za-z0-9\-\/]+)",
         r"\bInvoice\s*#\s*[:\-]?\s*([A-Za-z0-9\-\/]+)",
         r"\bRef\.?\s*[:\-]?\s*([A-Za-z0-9\-\/]+)",
         r"\bInvoice\s*[:\-]\s*([A-Za-z0-9\-\/]+)",
+        r"\bNumber\s*[:\-]\s*([A-Za-z0-9\-\/]+)",
         r"\bInvoice\s+([A-Za-z0-9\-\/]+)"
     ]
     
-    blacklist = {"invoice", "no", "date", "tax", "vendor", "supplier", "client", "to", "bill"}
+    # Expanded blacklist to reject structural English words captured as invoice IDs
+    blacklist = {
+        "invoice", "no", "number", "num", "date", "tax", "vendor", 
+        "supplier", "client", "to", "bill", "for", "amount", 
+        "total", "statement", "receipt", "page"
+    }
     
     for pattern in patterns:
         for match in re.finditer(pattern, text, re.IGNORECASE):
@@ -97,7 +105,7 @@ def extract_amount(text):
 def extract_tax(text):
     lines = text.split("\n")
     
-    # Step 1: Check for an explicit overall tax summary line to prevent component double-counting
+    # Step 1: Check for an explicit overall tax summary line
     for line in lines:
         if re.search(r"\b(total\s+tax|tax\s+total|total\s+gst|total\s+vat|total\s+igst)\b", line, re.IGNORECASE):
             numbers = re.findall(r"[\d,]+(?:\.\d+)?", line)
@@ -108,7 +116,6 @@ def extract_tax(text):
     total_tax = 0.0
     found_tax = False
     for line in lines:
-        # Avoid picking up base amounts or total invoice values
         if re.search(r"\b(taxable|before|subtotal|sub-total|total\s+due|grand\s+total)\b", line, re.IGNORECASE):
             continue
             
